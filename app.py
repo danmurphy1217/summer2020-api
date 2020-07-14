@@ -9,6 +9,12 @@ app.config["DEBUG"] = True
 def page_not_found(error):
     return "<h1>404</h1><p>The resource could not be found.</p>", 404
 
+def dict_factory(cursor, row):
+    d = {}
+    for idx, col in enumerate(cursor.description):
+        d[col[0]] = row[idx]
+    return d
+
 @app.route('/', methods=['GET'])
 def home():
     return "<h1>Dan Murphy Summer 2020</h1><p>This site is a prototype API for accessing the things I've done during the summer of 2020.</p>"
@@ -16,6 +22,7 @@ def home():
 @app.route("/api/v1/summer/all/", methods=['GET'])
 def get_all():
     conn = sqlite3.connect("summer2020.db")
+    conn.row_factory = dict_factory
     cur = conn.cursor()
     # retrieve data from each table
     return jsonify(
@@ -30,14 +37,15 @@ def get_all():
 @app.route("/api/v1/summer/books/<all>/", methods=['GET'])
 def get_book_ids(all):
     conn = sqlite3.connect("summer2020.db")
+    conn.row_factory = dict_factory
     cur = conn.cursor()
     if request.args.get('id'):
-        max_id = [val[0] for val in cur.execute('''SELECT count(*) FROM books''').fetchall()]
+        max_id = cur.execute('''SELECT count(*) FROM books''').fetchall()[0].get('count(*)')
         selected_id = int(request.args.get('id'))
 
         # check for out of range ID
-        if (selected_id >= max_id[0]) | (selected_id < 0) :
-            return "ID is out of range. Try an ID between 0 and {}".format(max_id[0] - 1)
+        if (selected_id >= max_id) | (selected_id < 0) :
+            return "ID is out of range. Try an ID between 0 and {}".format(max_id - 1)
 
     elif all == "all":
         # return all books
@@ -55,14 +63,15 @@ def get_book_ids(all):
 @app.route('/api/v1/summer/textbooks/<all>/', methods=['GET'])
 def get_textbook_ids(all):
     conn = sqlite3.connect("summer2020.db")
+    conn.row_factory = dict_factory
     cur = conn.cursor()
     if request.args.get('id'):
-        max_id = [val[0] for val in cur.execute('''SELECT count(*) FROM textbooks''').fetchall()]
+        max_id = cur.execute('''SELECT count(*) FROM textbooks''').fetchall()[0].get('count(*)')
         selected_id = int(request.args.get('id'))
 
         # check for out of range ID
-        if (selected_id > max_id[0]) | (selected_id < 0) :
-            return "ID is out of range. Try an ID between 1 and {}".format(max_id[0])
+        if (selected_id > max_id) | (selected_id < 0) :
+            return "ID is out of range. Try an ID between 1 and {}".format(max_id)
 
     elif all == "all":
         # return all textbooks
@@ -81,9 +90,11 @@ def get_textbook_ids(all):
 @app.route("/api/v1/summer/work/<all>/", methods=['GET'])
 def get_work_co(all):
     conn = sqlite3.connect("summer2020.db")
+    conn.row_factory = dict_factory
     cur = conn.cursor()
+
     if request.args.get('company'):        
-        company_list = [company[0] for company in cur.execute('''SELECT company FROM work''')]
+        company_list = [company.get('company') for company in cur.execute('''SELECT company FROM work''')]
         selected_company = str(request.args.get('company'))
         
         # check for non-existent company
