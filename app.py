@@ -1,6 +1,7 @@
 import flask
 from flask import request, jsonify
 import sqlite3
+import os
 
 app = flask.Flask(__name__)
 app.config["DEBUG"] = True
@@ -31,85 +32,208 @@ def get_all():
                    cur.execute('''SELECT * FROM work''').fetchall()
                   )
 
-
 # BOOKS
 @app.route("/api/v1/summer/books/", methods=['GET'], defaults={'all' : None})
 @app.route("/api/v1/summer/books/<all>/", methods=['GET'])
-def get_book_ids(all):
-    conn = sqlite3.connect("summer2020.db")
+def get_book(all):
+    conn = sqlite3.connect('summer2020.db')
     conn.row_factory = dict_factory
     cur = conn.cursor()
-    if request.args.get('id'):
+
+    query_parameters = request.args
+    id = query_parameters.get('id')
+    title = query_parameters.get('title')
+    author = query_parameters.get('author')
+
+    query = "SELECT * FROM books WHERE"
+    to_filter = []
+
+    if id:
+        # id info
         max_id = cur.execute('''SELECT count(*) FROM books''').fetchall()[0].get('count(*)')
         selected_id = int(request.args.get('id'))
 
-        # check for out of range ID
+        # use id info to check for out of range ID
         if (selected_id >= max_id) | (selected_id < 0) :
             return "ID is out of range. Try an ID between 0 and {}".format(max_id - 1)
-
-    elif all == "all":
-        # return all books
-        return jsonify(
-            cur.execute('''SELECT * FROM books''').fetchall()
-            )
-    # otherwise filter by the provided ID
-    return jsonify(
-        cur.execute('''SELECT * FROM books WHERE id == {}'''.format(request.args.get('id'))).fetchall()
+        
+        # otherwise, add id to the query and filter
+        query += ' id=? AND'
+        to_filter.append(
+            id
         )
+    if title:
+        # list of titles
+        title_list = [book.get('title') for book in cur.execute('''SELECT title FROM books''')]
+        selected_title = str(request.args.get('title'))
+
+        # check if selected title is in the title list
+        if selected_title not in title_list:
+            return "<h3>I did not read that book (<em>yet!</em>).</h3> Thank you for the recommendation! In the meantime, try one of these books: <br /> {}".format(
+                "<br/><br/>".join(title_list)
+            )
+        
+        # otherwise, return the specified title
+        query += ' title=? AND'
+        to_filter.append(
+            title
+        )
+
+    if author:
+
+        author_list = [book.get('author(s)') for book in cur.execute('''SELECT `author(s)` FROM books''')]
+        selected_author = str(request.args.get('author'))
+
+
+        if selected_author not in author_list:
+            return "<h3>I haven't read a book by that author (<em>yet!</em>).</h3> Thank you for the recommendation! In the meantime, try one of these authors: <br /> {}".format(
+                "<br/><br/>".join(author_list)
+            )
+
+        query += ' `author(s)`=? AND'
+        to_filter.append(
+            author
+        )
+    if not (id or title or author):
+        return page_not_found(404)
+
+    query = query[:-4] + ';'
+
+    results = cur.execute(query, to_filter).fetchall()
+
+    return jsonify(results)
 
 
 # TEXTBOOKS
 @app.route('/api/v1/summer/textbooks/', methods=['GET'], defaults={'all' : None})
 @app.route('/api/v1/summer/textbooks/<all>/', methods=['GET'])
-def get_textbook_ids(all):
-    conn = sqlite3.connect("summer2020.db")
+def get_textbook(all):
+    conn = sqlite3.connect('summer2020.db')
     conn.row_factory = dict_factory
     cur = conn.cursor()
-    if request.args.get('id'):
+
+    query_parameters = request.args
+    id = query_parameters.get('id')
+    title = query_parameters.get('title')
+    author = query_parameters.get('author')
+
+    query = "SELECT * FROM textbooks WHERE"
+    to_filter = []
+
+    if id:
+        # id info
         max_id = cur.execute('''SELECT count(*) FROM textbooks''').fetchall()[0].get('count(*)')
         selected_id = int(request.args.get('id'))
 
-        # check for out of range ID
-        if (selected_id > max_id) | (selected_id < 0) :
-            return "ID is out of range. Try an ID between 1 and {}".format(max_id)
-
-    elif all == "all":
-        # return all textbooks
-        return jsonify(
-            cur.execute('''SELECT * FROM textbooks''').fetchall()
-            )
-    
-    # otherwise filter by the provided ID
-    return jsonify(
-        cur.execute('''SELECT * FROM textbooks WHERE id == {}'''.format(request.args.get('id'))).fetchall()
+        # use id info to check for out of range ID
+        if (selected_id >= max_id) | (selected_id < 0) :
+            return "ID is out of range. Try an ID between 0 and {}".format(max_id - 1)
+        
+        # otherwise, add id to the query and filter
+        query += ' id=? AND'
+        to_filter.append(
+            id
         )
+    if title:
+        # list of titles
+        title_list = [textbook.get('title') for textbook in cur.execute('''SELECT title FROM textbooks''')]
+        selected_title = str(request.args.get('title'))
+
+        # check if selected title is in the title list
+        if selected_title not in title_list:
+            return "<h3>I did not read that textbook (<em>yet!</em>).</h3> Thank you for the recommendation! In the meantime, try one of these books: <br /> {}".format(
+                "<br/><br/>".join(title_list)
+            )
+        
+        # otherwise, return the specified title
+        query += ' title=? AND'
+        to_filter.append(
+            title
+        )
+
+    if author:
+
+        author_list = [textbook.get('author(s)') for textbook in cur.execute('''SELECT `author(s)` FROM textbooks''')]
+        selected_author = str(request.args.get('author'))
+
+
+        if selected_author not in author_list:
+            return "<h3>I haven't read a book by that author (<em>yet!</em>).</h3> Thank you for the recommendation! In the meantime, try one of these authors: <br/> {}".format(
+                
+                "<br/><br/>".join(author_list)
+            )
+
+        query += ' `author(s)`=? AND'
+        to_filter.append(
+            author
+        )
+    if not (id or title or author):
+        return page_not_found(404)
+
+    query = query[:-4] + ';'
+
+    results = cur.execute(query, to_filter).fetchall()
+
+    return jsonify(results)
 
 
 # WORK
 @app.route("/api/v1/summer/work/", methods=['GET'], defaults = {'all' : None})
 @app.route("/api/v1/summer/work/<all>/", methods=['GET'])
-def get_work_co(all):
-    conn = sqlite3.connect("summer2020.db")
+def get_work(all):
+    conn = sqlite3.connect('summer2020.db')
     conn.row_factory = dict_factory
     cur = conn.cursor()
 
-    if request.args.get('company'):        
-        company_list = [company.get('company') for company in cur.execute('''SELECT company FROM work''')]
+    query_parameters = request.args
+    company = query_parameters.get('company')
+    description = query_parameters.get('description')
+    location = query_parameters.get('location')
+
+    query = "SELECT * FROM work WHERE"
+    to_filter = []
+
+    if company:
+        # company info
+        company_list = [company.get('company') for company in cur.execute('''SELECT `company` FROM work''')]
         selected_company = str(request.args.get('company'))
+
+        # use id info to check for out of range ID
+        if selected_company not in company_list :
+            return "ID is out of range. TO DO" 
         
-        # check for non-existent company
-        if (selected_company not in company_list) :
-            return "Dan did not work for '{}' in the summer of 2020. Please try one of these companys: {}.".format(selected_company,", ".join(company_list))
-    elif all == "all":
-        # return all companies
-        return jsonify(
-            cur.execute('''SELECT * FROM work''').fetchall()
-            )
-    
-    # otherwise, filter by the provided company
-    return jsonify(
-        cur.execute('''SELECT * FROM work WHERE company == "{}"'''.format(request.args.get('company'))).fetchall()
+        # otherwise, add id to the query and filter
+        query += ' company=? AND'
+        to_filter.append(
+            company
         )
+    
+
+
+    if location:
+
+        location_list = [book.get('location') for book in cur.execute('''SELECT `location` FROM work''')]
+        selected_location = str(request.args.get('location'))
+
+
+        if selected_location not in location_list:
+            return "<h3>I haven't worked with a company located in {}.</h3> Try one of these:<br/> {}".format(
+                selected_location, "<br/><br/>".join(list(set(location_list)))
+            )
+
+        query += ' `location`=? AND'
+        to_filter.append(
+            location
+        )
+    if not (company or location):
+        return page_not_found(404)
+
+    query = query[:-4] + ';'
+
+    results = cur.execute(query, to_filter).fetchall()
+
+    return jsonify(results)
+
 
 # SIDE PROJECTS
 """
