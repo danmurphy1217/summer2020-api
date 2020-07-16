@@ -1,5 +1,5 @@
 import flask
-from flask import request, jsonify
+from flask import request, jsonify, make_response
 import sqlite3
 import os
 import requests 
@@ -123,32 +123,116 @@ def bookAndTextbookPostRequest(table):
     conn.row_factory = dict_factory
     cur = conn.cursor()
     req = request.args.to_dict()
-    try:
-        if list(req.keys())[0] == 'title' and list(req.keys())[1] == 'author':
-            author = req.get('author')
-            title = req.get('title')
-            id_num = int(cur.execute(f"SELECT `id` FROM {table} WHERE `id` = (SELECT MAX(`id`)  FROM {table});").fetchall()[0].get('id'))+1
+    if len(req.keys()) < 2:
+        return make_response(jsonify({'error': 'Incorrect arguments. Please include title and author arguments.'}), 400)
+    elif list(req.keys())[0] == 'title' and list(req.keys())[1] == 'author':
+        author = req.get('author')
+        title = req.get('title')
+        id_num = int(cur.execute(f"SELECT `id` FROM {table} WHERE `id` = (SELECT MAX(`id`)  FROM {table});").fetchall()[0].get('id'))+1
 
-            duplicate_titles = "SELECT title FROM {} WHERE lower(title) == '{}';".format(table, title.lower())
-            if (len(cur.execute(duplicate_titles).fetchall())) != 0:
-                return "Duplicate entry. Try a different {} title!".format(table)
-            query = "INSERT INTO {}(`id`, `title`, `author(s)`) VALUES (?, ?, ?)".format(table)
-            cur.execute(query, [id_num, title, author])
-            conn.commit()
-            return f"Your POST request was successful. Title: {title}, and Author: {author} were inserted into the {table} table."
-    except:
-        return "<h3>Please include these three arguments in this order in your post request: <br/> <h3 \
-                style = 'background-color:lightgray; width: 200'> title, and author.</h3></h3>"
+        duplicate_titles = "SELECT title FROM {} WHERE lower(title) == '{}';".format(table, title.lower())
+        if (len(cur.execute(duplicate_titles).fetchall())) != 0:
+            return make_response(jsonify({'error': 'Duplicate entry. Specify a different title'}), 400)
 
+        query = "INSERT INTO {}(`id`, `title`, `author(s)`) VALUES (?, ?, ?)".format(table)
+        cur.execute(query, [id_num, title, author])
+        conn.commit()
+        return f"Your POST request was successful. Title: {title}, and Author: {author} were inserted into the {table} table."
+    else:
+        return make_response(jsonify({'error': 'Incorrect arguments. Please specify the title and author of the book.'}), 400)
+def bookAndTextbookDeleteRequest(table):
+    conn = sqlite3.connect('summer2020.db')
+    conn.row_factory = dict_factory
+    cur = conn.cursor()
+
+    query_parameters = request.args
+    user_id = query_parameters.get('id')
+    title = query_parameters.get('title')
+    author = query_parameters.get('author')
+
+    query = "DELETE FROM {} WHERE".format(table)
+    to_filter = []
+
+    if user_id:
+        # id info
+        max_id = cur.execute('''SELECT count(*) FROM {}'''.format(table)).fetchall()[0].get('count(*)')
+        selected_id = int(request.args.get('id'))
+        if table == 'books':
+            # use id info to check for out of range ID
+            if (selected_id >= max_id) | (selected_id < 0) :
+                return "ID is out of range. Try an ID between 0 and {}".format(max_id - 1)
+            
+            # otherwise, add id to the query and filter
+            query += ' id=? AND'
+            to_filter.append(
+                user_id
+            )
+        else: # if  table == textbooks
+            # use id info to check for out of range ID
+            if (selected_id > max_id) | (selected_id <= 0) :
+                return "ID is out of range. Try an ID between 1 and {}".format(max_id)
+            
+            # otherwise, add id to the query and filter
+            query += ' id=? AND'
+            to_filter.append(
+                user_id
+            )
+    if title:
+        # list of titles
+        title_list = [book.get('title') for book in cur.execute('''SELECT title FROM {}'''.format(table))]
+        selected_title = str(request.args.get('title'))
+
+        # check if selected title is in the title list
+        if selected_title not in title_list:
+            return "<h3>I did not read that book (<em>yet!</em>).</h3> Try to delete one of these books: <br /> {}".format(
+                "<br/><br/>".join(title_list)
+            )
+        
+        # otherwise, add the specified title
+        query += ' title=? AND'
+        to_filter.append(
+            title
+        )
+
+    if author:
+
+        author_list = [book.get('author(s)') for book in cur.execute('''SELECT `author(s)` FROM {}'''.format(table))]
+        selected_author = str(request.args.get('author'))
+
+
+        if selected_author not in author_list:
+            return "<h3>I haven't read a book by that author (<em>yet!</em>).</h3> Try to delete one of these authors: <br /> {}".format(
+                "<br/><br/>".join(set(author_list))
+            )
+
+        query += ' `author(s)`=? AND'
+        to_filter.append(
+            author
+        )
+    if not (user_id or title or author):
+        return make_response(jsonify({'error':'Please specify an ID, Title, or Author parameter'}), 404)
+
+    query = query[:-4] + ';'
+
+    results = cur.execute(query, to_filter).fetchall()
+    conn.commit()
+
+    return make_response(jsonify({'Success': '{} was deleted from the database.'.format(list(query_parameters.to_dict().values())[0])}))
 
 @app.route("/api/v1/summer/books/", methods=['GET'], defaults={'all' : None})
 @app.route("/api/v1/summer/books/<all>/", methods=['GET'])
 def get_book(all):
     return bookAndTextbookGetRequest(all, 'books')
 
-@app.route('/api/v1/books/', methods=['GET', 'POST'])
-def add_book():
-    bookAndTextbookPostRequest('books')
+@app.route('/api/v1/books/', methods=['GET', 'POST', 'DELETE'])
+def add_or_delete_book():
+    if request.method == 'POST':
+        return bookAndTextbookPostRequest('books')
+    elif request.method == 'DELETE':
+        return bookAndTextbookDeleteRequest('books')
+    elif request.method == 'GET':
+        return make_response(jsonify({'error':'GET method not supported for this endpoint. Try /api/v1/summer/books/all.'}), 405)
+
 
 # TEXTBOOKS
 @app.route('/api/v1/summer/textbooks/', methods=['GET'], defaults={'all' : None})
@@ -156,9 +240,14 @@ def add_book():
 def get_textbook(all):
        return bookAndTextbookGetRequest(all, 'textbooks')
 
-@app.route('/api/v1/textbooks/', methods=['GET', 'POST'])
-def add_textbook():
-    return bookAndTextbookPostRequest('textbooks')
+@app.route('/api/v1/textbooks/', methods=['GET', 'POST', 'DELETE'])
+def add_or_delete_textbook():
+    if request.method == 'POST':
+        return bookAndTextbookPostRequest('textbooks')
+    elif request.method == 'DELETE':
+        return bookAndTextbookDeleteRequest('textbooks')
+    elif request.method == 'GET':
+        return make_response(jsonify({'error':'GET method not supported for this endpoint. Try /api/v1/summer/textbooks/all to retrieve all data.'}), 405) 
 
 # WORK
 @app.route("/api/v1/summer/work/", methods=['GET'], defaults = {'all' : None})
