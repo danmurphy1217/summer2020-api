@@ -49,14 +49,14 @@ def get_book(all):
         )
 
     query_parameters = request.args
-    id = query_parameters.get('id')
+    user_id = query_parameters.get('id')
     title = query_parameters.get('title')
     author = query_parameters.get('author')
 
     query = "SELECT * FROM books WHERE"
     to_filter = []
 
-    if id:
+    if user_id:
         # id info
         max_id = cur.execute('''SELECT count(*) FROM books''').fetchall()[0].get('count(*)')
         selected_id = int(request.args.get('id'))
@@ -68,7 +68,7 @@ def get_book(all):
         # otherwise, add id to the query and filter
         query += ' id=? AND'
         to_filter.append(
-            id
+            user_id
         )
     if title:
         # list of titles
@@ -102,7 +102,7 @@ def get_book(all):
         to_filter.append(
             author
         )
-    if not (id or title or author):
+    if not (user_id or title or author):
         return page_not_found(404)
 
     query = query[:-4] + ';'
@@ -122,17 +122,17 @@ def add_book():
     if list(req.keys())[0] == 'title' and list(req.keys())[1] == 'author':
         author = req.get('author')
         title = req.get('title')
-        id = int(cur.execute('SELECT `id` FROM books WHERE `id` = (SELECT MAX(`id`)  FROM books);').fetchall()[0].get('id'))+1
+        user_id = int(cur.execute('SELECT `id` FROM books WHERE `id` = (SELECT MAX(`id`)  FROM books);').fetchall()[0].get('id'))+1
 
         duplicate_titles = "SELECT title FROM books WHERE lower(title) == '{}';".format(title.lower())
         if (len(cur.execute(duplicate_titles).fetchall())) != 0:
             return "Duplicate entry. Try a different book title!"
         query = "INSERT INTO books(`id`, `title`, `author(s)`) VALUES (?, ?, ?)"
-        cur.execute(query, [id, title, author])
+        cur.execute(query, [user_id, title, author])
         conn.commit()
+        return f"Your POST request was successful. Title: {title}, and Author: {author} were inserted into the table."
 
-        return f"Your POST request was successful. ID: {id}, Title: {title}, and Author: {author} were inserted into the table."
-    return "<h3>Please include these three arguments in this order in your post request: <br/> <h3 style = 'background-color:lightgray; width: 200'>id, title, and author.</h3></h3>"
+    return "<h3>Please include these three arguments in this order in your post request: <br/> <h3 style = 'background-color:lightgray; width: 200'> title, and author.</h3></h3>"
 
 
 
@@ -153,26 +153,26 @@ def get_textbook(all):
         )
 
     query_parameters = request.args
-    id = query_parameters.get('id')
+    user_id = query_parameters.get('id')
     title = query_parameters.get('title')
     author = query_parameters.get('author')
 
     query = "SELECT * FROM textbooks WHERE"
     to_filter = []
 
-    if id:
+    if user_id:
         # id info
         max_id = cur.execute('''SELECT count(*) FROM textbooks''').fetchall()[0].get('count(*)')
         selected_id = int(request.args.get('id'))
 
         # use id info to check for out of range ID
-        if (selected_id >= max_id) | (selected_id < 0) :
+        if (selected_id > max_id) | (selected_id < 0) :
             return "ID is out of range. Try an ID between 0 and {}".format(max_id - 1)
         
         # otherwise, add id to the query and filter
         query += ' id=? AND'
         to_filter.append(
-            id
+            user_id
         )
     if title:
         # list of titles
@@ -207,7 +207,7 @@ def get_textbook(all):
         to_filter.append(
             author
         )
-    if not (id or title or author):
+    if not (user_id or title or author):
         return page_not_found(404)
 
     query = query[:-4] + ';'
