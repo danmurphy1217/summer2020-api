@@ -140,6 +140,7 @@ def bookAndTextbookPostRequest(table):
         return f"Your POST request was successful. Title: {title}, and Author: {author} were inserted into the {table} table."
     else:
         return make_response(jsonify({'error': 'Incorrect arguments. Please specify the title and author of the book.'}), 400)
+
 def bookAndTextbookDeleteRequest(table):
     conn = sqlite3.connect('summer2020.db')
     conn.row_factory = dict_factory
@@ -219,20 +220,50 @@ def bookAndTextbookDeleteRequest(table):
 
     return make_response(jsonify({'Success': '{} was deleted from the database.'.format(list(query_parameters.to_dict().values())[0])}))
 
+def bookAndTextbookPutRequest(table):
+    conn = sqlite3.connect('summer2020.db')
+    conn.row_factory = dict_factory
+    cur = conn.cursor()
+    query_parameters = request.args
+    title = query_parameters.get('title')
+    author = query_parameters.get('author')
+    query = "SELECT * FROM {} WHERE".format(table)
+    to_filter = []
+
+    if title and author:
+        retrieve_data = cur.execute("""SELECT count(*) FROM {} WHERE LOWER(title) == '{}';""".format(table, title.lower()))
+        if len(retrieve_data.fetchall()) > 0:
+            current_id = cur.execute("""SELECT id FROM {} WHERE LOWER(title) == '{}';""".format(table, title.lower()))
+            update_value = cur.execute("""UPDATE {} SET id = '{}', title = '{}', `author(s)` = '{}' WHERE LOWER(title) == '{}';""".format(
+                table, int(current_id.fetchone().get('id')), title, author, title.lower()
+            ))
+            conn.commit()
+            return make_response(jsonify({'success': 'The data was correctly updated'}))
+        elif len(retrieve_data) == 0 :
+            insert_data = [] # Could just call post request function here?
+        else:
+            return make_response(jsonify({'error' : 'Please format your PUT request as api/v1/{}?title=<>?author=<>'.format(table)}), 400)
+    else:
+            return make_response(jsonify({'error' : 'Please format your PUT request as api/v1/{}?title=<>?author=<>'.format(table)}), 400)
+
+
+
+
 @app.route("/api/v1/summer/books/", methods=['GET'], defaults={'all' : None})
 @app.route("/api/v1/summer/books/<all>/", methods=['GET'])
 def get_book(all):
     return bookAndTextbookGetRequest(all, 'books')
 
-@app.route('/api/v1/books/', methods=['GET', 'POST', 'DELETE'])
-def add_or_delete_book():
+@app.route('/api/v1/books/', methods=['GET', 'POST', 'DELETE', 'PUT'])
+def crud_book():
     if request.method == 'POST':
         return bookAndTextbookPostRequest('books')
     elif request.method == 'DELETE':
         return bookAndTextbookDeleteRequest('books')
     elif request.method == 'GET':
         return make_response(jsonify({'error':'GET method not supported for this endpoint. Try /api/v1/summer/books/all.'}), 405)
-
+    elif request.method == 'PUT':
+        return bookAndTextbookPutRequest('books')
 
 # TEXTBOOKS
 @app.route('/api/v1/summer/textbooks/', methods=['GET'], defaults={'all' : None})
@@ -240,14 +271,16 @@ def add_or_delete_book():
 def get_textbook(all):
        return bookAndTextbookGetRequest(all, 'textbooks')
 
-@app.route('/api/v1/textbooks/', methods=['GET', 'POST', 'DELETE'])
-def add_or_delete_textbook():
+@app.route('/api/v1/textbooks/', methods=['GET', 'POST', 'DELETE', 'PUT'])
+def crud_textbook():
     if request.method == 'POST':
         return bookAndTextbookPostRequest('textbooks')
     elif request.method == 'DELETE':
         return bookAndTextbookDeleteRequest('textbooks')
     elif request.method == 'GET':
         return make_response(jsonify({'error':'GET method not supported for this endpoint. Try /api/v1/summer/textbooks/all to retrieve all data.'}), 405) 
+    elif request.method == 'PUT':
+        return bookAndTextbookPostRequest('textbooks')
 
 # WORK
 @app.route("/api/v1/summer/work/", methods=['GET'], defaults = {'all' : None})
