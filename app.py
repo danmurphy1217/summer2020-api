@@ -1,5 +1,5 @@
 import flask
-from flask import request, jsonify, make_response
+from flask import request, jsonify, make_response, render_template, redirect
 import sqlite3
 import os
 import requests 
@@ -17,9 +17,55 @@ def dict_factory(cursor, row):
         d[col[0]] = row[idx]
     return d
 
+
 @app.route('/', methods=['GET'])
-def home():
-    return "<h1>Dan Murphy Summer 2020</h1><p>This site is a prototype API for accessing the things I've done during the summer of 2020.</p>"
+@app.route('/<name>', methods=['GET'])
+def homepage(name = "Dan Murphy"):
+    return render_template('welcome.html', name = name)
+
+@app.route('/', methods=['POST', 'GET'])
+def login():
+    conn = sqlite3.connect("summer2020.db")
+    conn.row_factory = dict_factory
+    cur = conn.cursor()
+
+    username = request.form['username']
+    password = request.form['password']
+
+    query = cur.execute("""SELECT count(*) FROM users WHERE `username` == '{}'""".format(username)).fetchone()
+    if query.get('count(*)') == 0:
+        return confirm_signup()
+    else:
+        return get_all()
+        # return make_response(jsonify({'error': 'duplicate username','username' : processed_username,  'password' : processed_password}), 200)
+
+
+@app.route('/', methods=['POST', 'GET'])
+def confirm_signup():
+    try:
+        conn = sqlite3.connect("summer2020.db")
+        conn.row_factory = dict_factory
+        cur = conn.cursor()
+        user_id = int(cur.execute("""SELECT count(*) FROM users""").fetchone().get('count(*)')) + 1
+        name = request.form['name']
+        username = request.form['username']
+        password = request.form['password']
+        confirmed_password = request.form['confirmed_password']
+
+        check_for_duplicates = """SELECT COUNT(*) FROM users where `username` == '{}'""".format(username)
+        results = cur.execute(check_for_duplicates)
+        if results == 0:
+            return "That username is already taken. Please try again."
+
+        query = """INSERT INTO users(user_id, name, username, password) VALUES (?, ?, ?, ?)"""
+        values_to_insert = [user_id , name, username, password]
+        cur.execute(query, values_to_insert)
+        conn.commit()
+        return make_response(jsonify({'id' : user_id, 'name': name, 'username': username}), 200)
+    except:
+        return render_template('signup.html')
+
+
 
 @app.route("/api/v1/summer/all/", methods=['GET'])
 def get_all():
