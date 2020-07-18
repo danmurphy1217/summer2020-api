@@ -29,43 +29,23 @@ def login():
     conn.row_factory = dict_factory
     cur = conn.cursor()
 
-    username = request.form['username']
-    password = request.form['password']
 
-    query = cur.execute("""SELECT count(*) FROM users WHERE `username` == '{}'""".format(username)).fetchone()
-    if query.get('count(*)') == 0:
-        return confirm_signup()
+    book = request.form['book_title']
+    textbook = request.form['textbook_title']
+    work = request.form['work_title']
+
+    if work:
+        results = cur.execute("""SELECT * FROM work WHERE `company` == '{}'""".format(work)).fetchall()
+        return jsonify(results)
+    if textbook:
+        results = cur.execute("""SELECT * FROM textbooks WHERE `title` == '{}'""".format(textbook)).fetchall()
+        return jsonify(results)
+    if book:
+        results = cur.execute("""SELECT * FROM books WHERE `title` == '{}'""".format(book)).fetchall()
+        return jsonify(results)
     else:
-        return get_all()
-        # return make_response(jsonify({'error': 'duplicate username','username' : processed_username,  'password' : processed_password}), 200)
-
-
-@app.route('/', methods=['POST', 'GET'])
-def confirm_signup():
-    try:
-        conn = sqlite3.connect("summer2020.db")
-        conn.row_factory = dict_factory
-        cur = conn.cursor()
-        user_id = int(cur.execute("""SELECT count(*) FROM users""").fetchone().get('count(*)')) + 1
-        name = request.form['name']
-        username = request.form['username']
-        password = request.form['password']
-        confirmed_password = request.form['confirmed_password']
-
-        check_for_duplicates = """SELECT COUNT(*) FROM users where `username` == '{}'""".format(username)
-        results = cur.execute(check_for_duplicates)
-        if results == 0:
-            return "That username is already taken. Please try again."
-
-        query = """INSERT INTO users(user_id, name, username, password) VALUES (?, ?, ?, ?)"""
-        values_to_insert = [user_id , name, username, password]
-        cur.execute(query, values_to_insert)
-        conn.commit()
-        return make_response(jsonify({'id' : user_id, 'name': name, 'username': username}), 200)
-    except:
-        return render_template('signup.html')
-
-
+        return make_response(jsonify({'error': 'invalid input'}), 405)
+    
 
 @app.route("/api/v1/summer/all/", methods=['GET'])
 def get_all():
@@ -392,10 +372,6 @@ def get_work(all):
 
     return jsonify(results)
 
-# SIDE PROJECTS
-"""
-To Do
-"""
 
 if __name__ == "__main__":
     app.run()

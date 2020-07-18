@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Document</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='main.css') }}">
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='stylesheets/main.css') }}">
 </head>
 <body>
     {% if name %}
@@ -15,15 +15,27 @@
   <h1>Hello, World!</h1>
     {% endif %}
     <p>This site is a prototype API for accessing the books and textbooks I've read and the work I've done for various companies during the summer of 2020.</p>
-    <p>Below, sign up and try some test API requests. Let me know what you think!</p>
+    <p>Below, try some test API requests. Let me know what you think!</p>
+    <br><br>
+    <p>Make some test API calls</p>
+    <button type="button"><a href="http://127.0.0.1:5000/api/v1/summer/books/all/">GET Request for all books</a></button>
+    <br>
+    <br>
+    <button type="button"><a href="http://127.0.0.1:5000/api/v1/summer/textbooks/all/">GET Request for all textbooks </a></button>
+    <br>
+    <br>
+    <button type="button"><a href="http://127.0.0.1:5000/api/v1/summer/work/all/"> GET Request for all work</a></button>
+    <p>Or, retrieve a specific resource</p>
     <form method="POST">
-        <h3>Username</h3>
-        <input name="username">
-        <br>
-        <br/>
-        <h3>Password</h3>
-        <input name="password"> 
-        <input type="submit">
+        <h3>Books</h3>
+        <p>Enter a book title.</p>
+        <input name = "book_title"><input type="submit">
+        <h3>Textbooks</h3>
+        <p>Enter a textbook title</p>
+        <input name = "textbook_title"><input type="submit">
+        <h3>Work</h3>
+        <p>Enter a Company Name</p>
+        <input name = "work_title"><input type="submit">
     </form>
 </body>
 </html>
