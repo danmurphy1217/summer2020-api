@@ -34,13 +34,13 @@ def login():
     textbook = request.form['textbook_title']
     work = request.form['work_title']
 
-    if work:
+    if work and not (textbook or book):
         results = cur.execute("""SELECT * FROM work WHERE `company` == '{}'""".format(work)).fetchall()
         return jsonify(results)
-    if textbook:
+    if textbook and not (work or book):
         results = cur.execute("""SELECT * FROM textbooks WHERE `title` == '{}'""".format(textbook)).fetchall()
         return jsonify(results)
-    if book:
+    if book and not (textbook or work):
         results = cur.execute("""SELECT * FROM books WHERE `title` == '{}'""".format(book)).fetchall()
         return jsonify(results)
     else:
@@ -253,24 +253,51 @@ def bookAndTextbookPutRequest(table):
     query_parameters = request.args
     title = query_parameters.get('title')
     author = query_parameters.get('author')
-    query = "SELECT * FROM {} WHERE".format(table)
-    to_filter = []
+    
+    title_responses = cur.execute("""SELECT title FROM {} WHERE LOWER(title) == '{}';""".format(table, title.lower())).fetchall()
+    author_responses = cur.execute("""SELECT `author(s)` FROM {} WHERE LOWER(`author(s)`) == '{}';""".format(table, author.lower())).fetchall()
 
-    if title and author:
-        retrieve_data = cur.execute("""SELECT count(*) FROM {} WHERE LOWER(title) == '{}';""".format(table, title.lower()))
-        if len(retrieve_data.fetchall()) > 0:
-            current_id = cur.execute("""SELECT id FROM {} WHERE LOWER(title) == '{}';""".format(table, title.lower()))
-            update_value = cur.execute("""UPDATE {} SET id = '{}', title = '{}', `author(s)` = '{}' WHERE LOWER(title) == '{}';""".format(
-                table, int(current_id.fetchone().get('id')), title, author, title.lower()
+    if len(title_responses) == 0:
+        id_num = int(cur.execute(f"SELECT `id` FROM {table} WHERE `id` = (SELECT MAX(`id`)  FROM {table});").fetchall()[0].get('id'))+1
+        query = "INSERT INTO {}(`id`, `title`, `author(s)`) VALUES (?, ?, ?)".format(table)
+        cur.execute(query, [id_num, title, author])
+        conn.commit()
+        return f"Your PUT request was successful. Title: {title}, and Author: {author} were inserted into the {table} table."
+    elif title_responses != 0:
+        id_query = cur.execute("""SELECT id from {} WHERE LOWER(title) = '{}'""".format(table, title.lower())).fetchall()[0].get('id')
+        update_value = cur.execute("""UPDATE {} SET `title` = '{}', `author(s)` = '{}' WHERE `id` == {};""".format(
+                table, title, author, int(id_query)
             ))
-            conn.commit()
-            return make_response(jsonify({'success': 'The data was correctly updated'}))
-        elif len(retrieve_data) == 0 :
-            insert_data = [] # Could just call post request function here?
-        else:
-            return make_response(jsonify({'error' : 'Please format your PUT request as api/v1/{}?title=<>?author=<>'.format(table)}), 400)
+        conn.commit()
+        return make_response(jsonify({'success': 'The data was correctly updated'}))
     else:
-            return make_response(jsonify({'error' : 'Please format your PUT request as api/v1/{}?title=<>?author=<>'.format(table)}), 400)
+        return make_response(jsonify({
+            'error':'check the documentation and ensure your requests are of the specified format.'
+        }))
+
+
+
+    # if title and author:
+    #     retrieve_title_count = cur.execute("""SELECT count(*) FROM {} WHERE LOWER(title) == '{}';""".format(table, title.lower()))
+    #     retrieve_author_count = cur.execute("""SELECT count(*) FROM {} WHERE LOWER(`authors(s)`) == '{}';""".format(table, author.lower()))
+    #     if (retrieve_title_count and retrieve_author_count) == 1:
+    #         if retrieve_author_count == author:
+    #             return make_response(jsonify({'error': 'No changes were made to the specified resource'}), 405)
+
+    #         current_id = cur.execute("""SELECT id FROM {} WHERE LOWER(title) == '{}';""".format(table, title.lower()))
+    #         update_value = cur.execute("""UPDATE {} SET id = '{}', title = '{}', `author(s)` = '{}' WHERE LOWER(title) == '{}';""".format(
+    #             table, int(current_id.fetchone().get('id')), title, author, title.lower()
+    #         ))
+    #         conn.commit()
+    #         return make_response(jsonify({'success': 'The data was correctly updated'}))
+    #     elif (len(retrieve_title_count) or len(retrieve_author_count)) == 0:
+    #         return bookAndTextbookPostRequest(table)
+    #     elif (len(retrieve_author_count) and len(retrieve_title_count)) > 1:
+    #         pass
+    #     else:
+    #         return make_response(jsonify({'error' : 'Please format your PUT request as api/v1/{}?title=<>?author=<>'.format(table)}), 400)
+    # else:
+    #         return make_response(jsonify({'error' : 'Please format your PUT request as api/v1/{}?title=<>?author=<>'.format(table)}), 400)
 
 
 
@@ -306,7 +333,7 @@ def crud_textbook():
     elif request.method == 'GET':
         return make_response(jsonify({'error':'GET method not supported for this endpoint. Try /api/v1/summer/textbooks/all to retrieve all data.'}), 405) 
     elif request.method == 'PUT':
-        return bookAndTextbookPostRequest('textbooks')
+        return bookAndTextbookPutRequest('textbooks')
 
 # WORK
 @app.route("/api/v1/summer/work/", methods=['GET'], defaults = {'all' : None})
